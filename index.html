@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Cryptocurrency dashboard</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+    <script type="module" src="../d3-components/curves.js"></script>
+    <style>
+.btn-outline-primary svg {
+  fill: var(--blue);
+}
+.btn-outline-danger svg {
+  fill: var(--danger);
+}
+.btn-outline-primary:hover svg, .btn-outline-danger:hover svg {
+  fill: white;
+}
+svg {
+  width: 24px;
+  height: 24px;
+}
+input {
+  position: relative;
+  z-index: 1001;
+}
+.dropdown-menu {
+  max-height: 50vh;
+  overflow-y: auto;
+  top: 59%;
+}
+.custom-range {
+  z-index: 999;
+}
+.updateNeeded, .trash {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.trash {
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+.graph-container {
+  position: relative;
+}
+.graph-container:hover .trash {
+  opacity: 1;
+}
+    </style>
+  </head>
+  <body>
+    <div id="app" class="container-fluid">
+      <header class="row border-bottom border-primary py-2">
+        <h1 class="col display-5 text-primary text-center py-2">Cryptocurrency dashboard</h1>
+        <form class="col-xl form-inline justify-content-center">
+          <div
+            class="dropdown mr-2"
+            @blur="inputFocus = false">
+          <input
+            type="text"
+            class="form-control mb-2"
+            placeholder="add currency…"
+            v-model="currInput"
+            @focus="inputFocus = true"
+            @blur="unFocus"
+            data-toggle="dropdown"
+            aria-haspopup="true"
+            aria-expanded="false">
+            <div v-bind:class="dropdown" aria-labelledby="dLabel">
+              <a @focus="inputFocus = true" v-for="product in matchingProducts" href="#" class="dropdown-item" v-on:click="selectProduct(product)">{{ product }}</a>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-outline-primary mb-2 mr-2" v-on:click="addCurrency">
+            <svg>
+              <use xlink:href="../octicons-sprite/octicons-sprite.svg#graph-24"></use>
+            </svg>
+          </button>
+          <div class="row-sm col-md ml-3">
+          <label for="granularity" class="row justify-content-center">Granularity: {{ realGranularity.label }}</label>
+          <input v-model="granularity"
+            v-on:change="updGrn"
+            type="range"
+            class="custom-range m-2 row"
+            min="0"
+            max="5"
+            step="1"
+            id="granularity">
+            </div>
+        </form>
+      </header>
+      <main class="row p-2">
+<v-graph
+  v-for="(currency,i) in currencies"
+  v-bind:currencyname="currency.name"
+  v-bind:color="i">
+</v-graph>
+      </main>
+      <footer>
+      </footer>
+    </div>
+  </body>
+<script type="module">
+import { graph } from "./graph.vue.js";
+Vue.config.ignoredElements = [
+  'd3-curves'
+];
+let app = new Vue({
+  el: '#app',
+  data: {
+    currInput: "",
+    inputFocus: false,
+    granularity: 5,
+    currencies: [],
+    toFetch: [],
+    fetching: false,
+  },
+  components: {
+    "v-graph": graph
+  },
+  created() {
+    this.$on("removeCurrency",this.removeCurrency);
+    this.$on("setFetch",this.setFetch);
+    (async () => {
+      if (this.getStore("products") === null) {
+          let products = await fetch("https://api.pro.coinbase.com/products/");
+          products = await products.json();
+          products = products.map(e => e.id);
+          this.putStore("products",products);
+      }
+      this.products = this.getStore("products");
+    })();
+    if (this.getStore("currencies") === null) {
+      this.putStore("currencies",[]);
+    } else {
+      this.currencies = this.getStore("currencies");
+    }
+  },
+  computed: {
+    realGranularity() {
+      let values = [60, 300, 900, 3600, 21600, 86400];
+      let labels = ["1m","5m","15m","1h","6h","1d"];
+      return {
+        value: values[this.granularity],
+        label: labels[this.granularity]
+      };
+    },
+    dropdown() {
+      let classes = {
+        "dropdown-menu": true,
+        "w-100": true
+      };
+      classes.show = (this.currInput != "" && this.inputFocus) ;
+      return classes;
+    },
+    matchingProducts() {
+      if (this.currInput != "") {
+        return this.products.filter(e => e.includes(this.currInput));
+      }
+      return [];
+    }    
+  },
+  methods: {
+    updGrn() {
+      this.$emit("updatedGranularity",this.realGranularity.value);
+    },
+    wait(t) {
+      return new Promise((resolve,reject) => {
+        setTimeout(() => {
+          resolve();
+        },t);
+      });
+    },
+    async gofetch() {
+      console.log("go fetch",this.toFetch.length);
+      this.fetching = true;
+      while (this.toFetch.length > 0) {
+        let tofetch = this.toFetch[0];
+        let results = await fetch("https://api.pro.coinbase.com/products/"+tofetch[0]+"/candles?granularity="+tofetch[1]);
+        results = await results.json();
+        this.$emit("fetched",[tofetch[0],results]);
+        this.toFetch.shift();
+        await this.wait(1200);
+      }
+      this.fetching = false;
+    },
+    async setFetch(data) {
+      if (typeof this.toFetch.find(e => ((e[0] == data[0]) && (e[1] == data[1]))) === "undefined") {
+        this.toFetch.push(data);
+        if (!this.fetching) {
+          this.gofetch();
+        }
+      };
+    },
+    removeCurrency(key) {
+      this.currencies = this.currencies.filter(e => e.name != key);
+      this.putStore("currencies",this.currencies);
+    },
+    unFocus() {
+      setTimeout(() => {
+        this.inputFocus = false;
+      },100);
+    },
+    selectProduct(value) {
+      document.querySelector("input").focus();
+      this.currInput = value;
+    },
+    getStore(key) {
+      try {
+        return JSON.parse(localStorage.getItem(key));
+      } catch {
+        return null;
+      }
+    },
+    putStore(key,value) {
+      localStorage.setItem(key,JSON.stringify(value));
+    },
+    addCurrency(e) {
+      e.preventDefault();
+      if (typeof this.currencies.find(e => e.name == this.currInput) == "undefined") {
+        let currency = {
+          name: this.currInput,
+          sets: [
+            {
+              granularity: this.realGranularity.value,
+              data: false,
+              lastUpd: false
+            }
+          ]
+        };
+        this.currencies.push(currency);
+        this.putStore("currencies",this.currencies);
+      }
+      this.currInput = "";
+    }
+  }
+});
+/*(async () => {
+  let data = await fetch("https://api.pro.coinbase.com/products/BTC-EUR/candles?granularity=86400");
+  data = await data.json();
+  let json = { "sets": [[]] };
+  data.map(e => {
+    json.sets[0].push({"x":e[0],"y":e[4]});
+  });
+  let component = document.createElement("d3-curves");
+  component.setAttribute("caption","BTC-EUR");
+  component.setAttribute("line","static");
+  //component.setAttribute("ticks-x","2");
+  //component.setAttribute("ticks-y","1");
+  component.setAttribute("labels-value","y");
+  component.setAttribute("labels-style","hover");
+  component.setAttribute("json",JSON.stringify(json));
+  document.querySelector("main").append(component);
+})();*/
+</script>
+</html>
