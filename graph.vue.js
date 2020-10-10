@@ -89,13 +89,17 @@ let graph = {
     },
     getColor() {
       return [
-        "schemeCategory10",
-        "schemeDark2",
-        "schemeSet1",
-        "schemeTableau10",
-        "schemeAccent",
-        "schemePaired"
-      ][this.color%6];
+        "#4e79a7",
+        "#f28e2c",
+        "#e15759",
+        "#76b7b2",
+        "#59a14f",
+        "#edc949",
+        "#af7aa1",
+        "#ff9da7",
+        "#9c755f",
+        "#00bed1"
+      ][this.color%10];
     }
   },
   props: ["currencyname","color"],
@@ -107,7 +111,7 @@ let graph = {
           v-bind:caption="currencyname"
           ticks-y="3"
           ticks-x="0"
-          v-bind:color-scheme="getColor"
+          v-bind:color="getColor"
           v-bind:json="json">
         </d3-curves>
         <div v-if="updateNeeded" class="updateNeeded">
