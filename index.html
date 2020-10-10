@@ -178,7 +178,6 @@ let app = new Vue({
       });
     },
     async gofetch() {
-      console.log("go fetch",this.toFetch.length);
       this.fetching = true;
       while (this.toFetch.length > 0) {
         let tofetch = this.toFetch[0];
