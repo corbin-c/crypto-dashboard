@@ -47,20 +47,22 @@ let graph = {
       });
       this.data = output;
       let currencies = this.$root.currencies;
-      let gran = currencies.find(e => e.name == this.currencyname).sets.find(e => e.granularity == this.granularity);
-      if (typeof gran !== "undefined") {
-        gran.data = output;
-        gran.lastUpd = (new Date()).valueOf();
-      } else {
-        currencies.find(e => e.name == this.currencyname).sets.push({
-          granularity: this.granularity,
-          data: output,
-          lastUpd: (new Date()).valueOf()
-        });
+      if (currencies.length > 0) {
+        let gran = currencies.find(e => e.name == this.currencyname).sets.find(e => e.granularity == this.granularity);
+        if (typeof gran !== "undefined") {
+          gran.data = output;
+          gran.lastUpd = (new Date()).valueOf();
+        } else {
+          currencies.find(e => e.name == this.currencyname).sets.push({
+            granularity: this.granularity,
+            data: output,
+            lastUpd: (new Date()).valueOf()
+          });
+        }
+        this.updateNeeded = false;
+        this.$root.currencies = currencies;
+        this.$root.putStore("currencies",currencies);
       }
-      this.updateNeeded = false;
-      this.$root.currencies = currencies;
-      this.$root.putStore("currencies",currencies);
     },
     async checkData() {
       let values = this.getValues();
